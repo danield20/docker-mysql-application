@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+
+  mysql-dev:
+    image: mysql:8.0.2
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: flights
+    ports:
+      - "8000:3306"
+    volumes:
+      - ./sql_setup:/docker-entrypoint-initdb.d
+
+  myserver:
+    build:
+        context: ./server_img
+    image: server_py
+    volumes:
+      - ./server_img/src:/app
+    depends_on:
+      - mysql-dev
