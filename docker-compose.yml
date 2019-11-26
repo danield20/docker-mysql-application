@@ -13,6 +13,16 @@ services:
       - ./sql_setup:/docker-entrypoint-initdb.d
       - mysql_data:/var/lib/mysql
 
+  myadmin-app:
+    build:
+        context: ./app_img
+    image: adminapp_py
+    volumes:
+      - ./app_img/src:/app
+    depends_on:
+      - mysql-dev
+    stdin_open: true
+
   myserver:
     build:
         context: ./server_img
@@ -21,7 +31,8 @@ services:
       - ./server_img/src:/app
     depends_on:
       - mysql-dev
-    stdin_open: true
+    ports:
+      - "8001:5000"
 
 volumes:
   mysql_data: {}

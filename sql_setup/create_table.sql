@@ -8,5 +8,3 @@ create table flights_table(
     number_seats    int,
     primary key(id)
 );
-
-INSERT INTO flights_table VALUES (1, 'Bucuresti', 'Timisoara', 2, 23, 1, 50);
