@@ -15,24 +15,16 @@ def connect_to_database():
         except:
             continue
 
-    # prepare a cursor object using cursor() method
-    cursor = db.cursor()
-
-    # execute SQL query using execute() method.
-    cursor.execute("SELECT VERSION()")
-
-    # Fetch a single row using fetchone() method.
-    data = cursor.fetchone()
-    print ("Database version : %s " % data)
-
 def print_possible_commands():
     print("help - print this list")
     print("add flight_id, flight_origin, flight_departure, dep_day, dep_hour, duration, seats_number")
     print("cancel flight_id")
     print("print - prints current flights")
+    print("reservations - prints all current reservations")
     print("exit - exits administration app")
 
 def print_flights():
+    connect_to_database()
     cursor = db.cursor()
     cursor.execute("select * from flights_table")
     rows = cursor.fetchall()
@@ -41,8 +33,22 @@ def print_flights():
         print(row)
 
     cursor.close()
+    db.close()
+
+def print_reservations():
+    connect_to_database()
+    cursor = db.cursor()
+    cursor.execute("select * from reservations_table")
+    rows = cursor.fetchall()
+
+    for row in rows:
+        print(row)
+
+    cursor.close()
+    db.close()
 
 def add_flight(cmd):
+    connect_to_database()
     flight_columns = cmd.split(' ')
     values_to_add = "({}, \"{}\", \"{}\", {}, {}, {}, {})".format(flight_columns[1],
                                                                   flight_columns[2],
@@ -59,8 +65,10 @@ def add_flight(cmd):
 
     db.commit()
     cursor.close()
+    db.close()
 
 def cancel_flight(cmd):
+    connect_to_database()
     delete_flight_id = cmd.split(' ')[1]
 
     cursor = db.cursor()
@@ -71,6 +79,7 @@ def cancel_flight(cmd):
 
     db.commit()
     cursor.close()
+    db.close()
 
 
 def get_commands():
@@ -85,19 +94,12 @@ def get_commands():
             break
         elif line == "print":
             print_flights()
+        elif line == "reservations":
+            print_reservations()
         elif line.split(" ")[0] == "add":
             add_flight(line)
         elif line.split(" ")[0] == "cancel":
             cancel_flight(line)
 
-def main():
-    connect_to_database()
-
-    get_commands()
-
-    # disconnect from server and save any uncommited changes
-    db.commit()
-    db.close()
-
 if __name__ == "__main__":
-    main()
+    get_commands()
