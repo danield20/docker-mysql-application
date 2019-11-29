@@ -7,19 +7,35 @@ server_host = "myserver:5000"
 adminapp_host = "myadmin-app:5000"
 
 def print_possible_commands():
+    print("\nNormal operations: ")
+    print("exit - exits client")
     print("help - print this list")
-    print("add flight_id flight_origin flight_departure dep_day dep_hour duration seats_number")
-    print("cancel flight_id")
-    print("book flight_id nr_of_persons")
     print("print - prints current flights")
-    print("reservations - prints all current reservations")
-    print("exit - exits administration app")
+    print("optimal source dest max days")
+    print("book flight_id nr_of_persons\n")
+    print("Privileged operations(require authentification): ")
+    print("add flight_id source destination day hour duration capacity")
+    print("cancel flight_id")
+    print("reservations - prints all current reservations\n")
 
 # normal operation
 def print_flights():
     url = "http://" + server_host + "/get_flights"
     r = requests.get(url)
     print(r.json())
+
+def get_optimal(cmd):
+    info = cmd.split(' ')
+    PARAMS = {"source" : info[1],
+              "dest"   : info[2],
+              "max"    : info[3],
+              "day"    : info[4]}
+    url = "http://" + server_host + "/get_optimal"
+    r = requests.get(url, params = PARAMS)
+    if r.text.split(" ")[0] == "Sorry,":
+        print(r.text)
+    else:
+        print(r.json())
 
 def book_flight(cmd):
     info = cmd.split(' ')
@@ -31,12 +47,11 @@ def book_flight(cmd):
     r = requests.put(url, params = PARAMS)
     print(r.text)
 
-
 # privileged operation
 def print_reservations():
     url = "http://" + adminapp_host + "/get_reservations"
     r = requests.get(url)
-    print(r.json())
+    print(r.text)
 
 # privileged operation
 def add_flight(cmd):
@@ -76,6 +91,8 @@ def get_commands():
             print_flights()
         elif line == "reservations":
             print_reservations()
+        elif line.split(" ")[0] == "optimal":
+            get_optimal(line)
         elif line.split(" ")[0] == "book":
             book_flight(line)
         elif line.split(" ")[0] == "add":
