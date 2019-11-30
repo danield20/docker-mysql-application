@@ -148,7 +148,7 @@ def get_best_route(root, dest):
 
 def get_opt(source, dest, max_flight, dep_day):
     root = construct_graph(source, dest, max_flight, dep_day)
-    # print_graph(root, 0)
+    #print_graph(root, 0)
     opt_route = get_best_route(root, dest)
     # print(opt_route, flush=True)
     return opt_route
@@ -215,12 +215,10 @@ def book_flight():
     args = request.args
     flight_list = json.loads(args.get('flight_id'))
     number_of_people = json.loads(args.get('nr'))
-    print(number_of_people)
 
     for flight_id in flight_list:
-        print(flight_id)
         if not valid_flight(flight_id, number_of_people):
-            return Response("Flight no longer available or capacity exceided!", status=403)
+            return "Flight no longer available or capacity exceided!"
 
     connect_to_database()
     cursor = db.cursor()
@@ -245,7 +243,53 @@ def book_flight():
     db.commit()
     db.close()
 
-    return Response("Flights booked succesfully, reservation id: " + str(next_id), status=201)
+    return "Flights booked succesfully, reservation id: " + str(next_id)
+
+@app.route('/buy_ticket', methods=['PUT'])
+def buy_ticket():
+    args = request.args
+    res_id = json.loads(args.get('res_id'))
+    card_number = json.loads(args.get('card_nr'))
+
+    connect_to_database()
+    cursor = db.cursor()
+
+    cursor.execute("select * from reservations_table where res_id = " + str(res_id))
+    row = cursor.fetchone()
+    if row == None:
+        return "Reservation is no longer available!"
+    number_of_people = row[1]
+
+    cursor.execute("select flight_id from reservations_flights where res_id = " + str(res_id))
+
+    ids = cursor.fetchall()
+    buy_string_flights = "("
+    for id in ids:
+        buy_string_flights += str(id[0]) + ","
+    buy_string_flights = buy_string_flights[:-1]
+    buy_string_flights += ")"
+
+    cursor.execute("select * from flights_table where id in " + buy_string_flights)
+    rows = cursor.fetchall()
+
+    values_to_add = "({}, {}, {})".format("NULL", res_id, card_number)
+    cursor.execute("insert into bought_tickets values " + values_to_add)
+
+    cursor.close()
+    db.commit()
+    db.close()
+
+    buy_string = ""
+    flights_str = ""
+    format_str = "Id: {:{width2}} | Origin: {:{width}} | Destination: {:{width}} | Departure day: {:{width2}} |" \
+                  " Departure hour: {:{width2}} | Duration: {:{width2}} \n"
+    for row in rows:
+        flights_str += format_str.format(row[0], row[1], row[2], row[3], row[4], row[5], width = 10, width2 = 3)
+
+    buy_string += "Bought ticket for reservation: " + str(res_id) + ", " + str(number_of_people) + " seats\n"
+    buy_string += flights_str
+
+    return buy_string[:-1]
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=False)

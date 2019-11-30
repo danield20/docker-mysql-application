@@ -21,4 +21,19 @@ create table reservations_flights(
     flight_id       int not null,
     foreign key(res_id) REFERENCES reservations_table(res_id) on delete cascade,
     foreign key(flight_id) REFERENCES flights_table(id) on delete cascade
-)
+);
+
+create table bought_tickets(
+    book_id         int not null auto_increment,
+    res_id          int not null,
+    card_info       varchar(50),
+    primary key (book_id),
+    foreign key(res_id) REFERENCES reservations_table(res_id) on delete cascade
+);
+
+create table admin_credentials(
+    username        varchar(60),
+    pass            varchar(60)
+);
+
+insert into admin_credentials values ("admin", "sprc2019");

@@ -17,15 +17,24 @@ def connect_to_database():
         except:
             continue
 
-@app.route('/get_flights', methods=['GET'])
-def print_flights():
+@app.route('/login', methods=['GET'])
+def login():
+    args = request.args
+    user = args.get('username')
+    passwd = args.get('password')
+
     connect_to_database()
     cursor = db.cursor()
-    cursor.execute("select * from flights_table")
+    cursor.execute("select * from admin_credentials where username = \"" + user + "\" and pass = \"" \
+        + passwd + "\"")
     rows = cursor.fetchall()
     cursor.close()
     db.close()
-    return jsonify(rows)
+
+    if len(rows) == 0:
+        return "Login failed!"
+    else:
+        return "Login succesfull!"
 
 @app.route('/get_reservations', methods=['GET'])
 def print_reservations():
@@ -53,6 +62,21 @@ def print_reservations():
     db.close()
 
     return reservation_string[:-1]
+
+@app.route('/get_bought', methods=['GET'])
+def get_bought():
+    connect_to_database()
+    cursor = db.cursor()
+    bought_string = ""
+    cursor.execute("select * from bought_tickets")
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    for row in rows:
+        bought_string += "Bought ticket id: " + str(row[0]) + " for reservation " + str(row[1])
+
+    return bought_string
 
 @app.route('/add_flight', methods=['PUT'])
 def add_flight():
@@ -90,7 +114,16 @@ def cancel_flight():
     flight_id = args.get('flight_id')
     connect_to_database()
     cursor = db.cursor()
-    canceled_reservations = ""
+
+    try:
+        cursor.execute("select * from flights_table where id = " + flight_id)
+    except pymysql.err.MySQLError:
+        return "Error canceling flight!"
+
+    rows = cursor.fetchall()
+
+    if len(rows) == 0:
+        return "Flight does not exist!"
 
     try:
         cursor.execute("select distinct(res_id) from reservations_flights where flight_id = " + flight_id)
@@ -98,10 +131,20 @@ def cancel_flight():
         return "Error canceling flight!"
 
     rows = cursor.fetchall()
+    canceled_reservations = ""
+    canceled_bought_tickets = ""
+
     for row in rows:
         try:
+
+            cursor.execute("select book_id from bought_tickets where res_id = " + str(row[0]))
+            rows2 = cursor.fetchall()
+            for row2 in rows2:
+                canceled_bought_tickets += str(row2[0]) + ","
+
             cursor.execute("delete from reservations_table where res_id = " + str(row[0]))
             canceled_reservations += str(row[0]) + ","
+
         except pymysql.err.MySQLError:
             return "Error canceling flight!"
 
@@ -113,7 +156,9 @@ def cancel_flight():
     db.commit()
     cursor.close()
     db.close()
-    return "Flight succesfully canceled! Canceled reservations: " + canceled_reservations[:-1]
+
+    return "Flight succesfully canceled!\nCanceled reservations: " + canceled_reservations[:-1] + \
+        "\nCanceled tickets: " + canceled_bought_tickets[:-1]
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=False)

@@ -22,7 +22,7 @@ services:
     depends_on:
       - mysql-dev
     ports:
-      - "8002:5000"
+      - "8001:5000"
 
   myserver:
     build:
@@ -33,7 +33,7 @@ services:
     depends_on:
       - mysql-dev
     ports:
-      - "8001:5000"
+      - "8002:5000"
 
   myclient:
     build:
@@ -41,8 +41,6 @@ services:
     image: client_py
     volumes:
       - ./client_img/src:/app
-    depends_on:
-      - mysql-dev
     stdin_open: true
 
 volumes:
