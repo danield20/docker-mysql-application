@@ -1,0 +1,134 @@
+In primul rand as vrea sa spun ca aceasta tema mi s-a parut foarte interesanta deoarece m-am familiarizat
+cu platforma Docker si cu lucrul cu o baza de date. In continuarea o sa explic pe scurt detaliile de
+implementare ale temei cat si modul de rulare al temei.
+
+In primul rand am ales sa folosesc 4 containere in urmatorul fel:
+    - un container pentru baza de date
+    - un container pentru aplicatia de administrare
+    - un container pentru server
+    - un container pentru client
+
+1. Containerul bazei de date:
+
+In primul rand am ales sa pornesc de la imaginea mysql:8.0.2. Pentru a asigura persistenta datelor si
+dupa inchiderea containerelor am folosit volume. In ceea ce priveste structura bazei de date aceasta
+este urmatoarea:
+
+    - o tabela pentru zboruri
+    - o tabela pentru rezervari, care contine doar id rezervarii si numarul de persoane
+    - o alta tabela in care am retinut, pentru fiecare rezervare, ce zboruri sunt in acea rezervare
+    - o tabela pentru biletele cumparate, in care se retine numarul biletului cumparat, reservare dupa
+care a fost cumparat biletul si informatia de pe card
+    - o tabela pentru retinerea credentialelor de logare pentru aplicatia de administrare
+
+Am ales sa folosesc asa de multe tabele, desi informatia se putea retine si in mai putine, deoarece
+mi-am dorit ca atunci cand se sterge un zbor, toate informatiile legate de acel zbor (rezervari, bilete)
+sa fie sterse automat. Acest lucru se realizeaza cu "on delete cascade" din mysql.
+
+2. Aplicatia de administrare si serverul
+
+Atat aplicatia de administrare cat si serverul se bazeaza pe primirea de cereri http de la client, si
+trimiterea raspunsului la acestea, odata interogata baza de date.
+
+Am ales sa folosesc limbajul pyhton, modulul Flask pentru cereri http si modulul pymysql pentru lucrul cu
+baza de date.
+
+Aplicatia de administrare:
+
+In primul rand, clientul poate comunica cu baza de date doar daca acesta este in modul privilegiat.
+Acest lucru se realizeaza prin trimiterea catre aplicatia de administrare o cerere de tip /login cu
+username-ul si parola. Odata logat, clientul poate adauga zboruri, anula zboruri, printa rezervarile
+facut cat si biletele cumparate. La anularea unui zbor, se anuleaza automat si toate rezervarile si
+biletele cumparate care contin acel zbor. Toate aceste informatii sunt afisate la stdin clientului.
+
+Serverul:
+
+Operatiile puse la dispozitie de catre server sunt urmatoarele: /get_flights care printeaza toate avioanele
+disponibile, /get_optimal care intoarce cea mai buna ruta intre o sursa si o destinatie (ca in enunt),
+/book_flight si /buy_ticket.
+
+In ceea ce priveste get_optimal am ales sa fac urmatoarea implementare:
+
+    - primul pas este contruirea unui arbore care are ca nod radacina, sursa calatoriei iar pe fiecare
+nivel pana la max_flights urmatoarele destinatii posibile. De exemplu daca am avea zborurile:
+Bucuresti-Timisoara, Timisoara-Madrid, Bucuresti-Londra, Londra-Madrid plecand din Bucuresti
+Londra arborele ar arata asa:
+
+Bucuresti
+    Timisoara
+        Madrid
+    Londra
+        Madrid
+
+    - pasul al doilea, se face un dfs pe acest arbore in care se gaseste cea mai buna ruta pentru ajungerea
+la destinatie. In parcurgerea dfs se iau in calcul anumite informatii pentru a nu explora rute inutil
+(de ex daca deja suntem pe o ruta mai proasta decat cea mai buna disponibila ne oprim)
+
+    Nota importanta:
+
+    Un zbor este luat in considerare pentru urmatoarea decolare doar daca ora de decolare este la cel
+putin o ora distanta de ora de aterizare a zborului precedent.
+
+3. Clientul
+
+Clientul are o interfata in linie de comanda, care primeste comenzi de la stdin si printeaza la stdout.
+Cea mai importanta comanda este comanda help care printeaza toate celelalte comenzi disponibile.
+
+In ceea ce priveste implementarea clientului, este facuta tot in python si foloseste modulul requests
+pentru trimiterea cererilor catre server si aplicatia de administrare. Atunci cand este data o comanda,
+aceasta comanda este parsata, se formeaza cererea, se trimite dupa care se printeaza raspunsul serverului.
+
+Pentru a putea trimite cereri catre aplicatia de administrare, este necesara logarea prin intermediul
+comenzii "login" urmat de user si parola.
+
+Important:
+    Credentialele pentru accesul in modul privilegiat sunt:
+        user: admin
+        pw:   sprc2019
+
+In modul normal promptul este: "$-" iar in modul privilegiat promptul este "admin$- ". Pentru a iesi
+din modul privilegiat se foloseste comanda logout.
+
+Rulare:
+
+    Pentru containerul sql, exista folderul sql_setup unde se gasesc configuratiile initiale pentru el.
+Pentru celelalte 3 containere exista un folder care se termina in "_img" care contin fisierele Dockerfile,
+requirement, si codul sursa.
+    Toate cele 4 containere contin setari suplimentare in fisierul docker-compose, serverul si aplicatia
+de administrare depinzand de baza de date.
+
+Modalitati de rulare:
+
+1. Daca se doreste pornirea celor 4 containere direct din docker-compose, atunci comanda make realizeaza
+acest lucru. In acest caz, clientul va putea accesa serverul si aplicatia de administrare cu numele lor
+din docker-compose ne mai fiind nevoie de un nume de host dat ca parametru. Atunci cand se apeleaza comanda
+make, se construiesc imaginile celor 4 containere, dupa care se pornesc baza de date, aplicatia de administrare
+si serverul iar ulterior se porneste si clientul si se ataseaza la el. In urma rularii comenzii make
+promptul interactiv de la client va aparea in acelasi terminal din care am rulat comanda. Putem iesi
+din client cu comanda "exit" iar daca dorim reconectarea la el putem introduce comanda "make restart_attach"
+care va reporni clientul si ne va reconecta la el.
+
+2. In cazul in care se doreste ca clientul sa fie la o alta adresa decat serverul, aplicatia de administrare,
+si baza de date se pot rula urmatoarea secventa de comenzi:
+
+    make build - construirea imaginilor pentru cele 4 containere
+    make start_service - pornirea bazei de date, serverului si a aplicatiei (pe hostul unde dorim sa ruleze)
+    make start_client host=(host unde este serviciul) - pornirea clientului
+
+Clientul presupune ca va gasi aplicatia de administrare la host:8001 si serverul la host:8002.
+
+De exemplu daca ne dorim executarea acestui proces pentru localhost vom rula urmatoarele comenzi:
+
+    make build
+    make start_service
+    make start_client host=localhost
+
+Pentru oprirea rularii clientului putem executa "exit" in interiorul sau. Dupa acest lucru, pentru
+oprirea celorlalte containere avem la dispozitie 2 optiuni: make stop sau make exit_remove_volumes
+care sterge si volumele (practic restarteaza si baza de date).
+
+Clientul ar trebui sa printeze prima data toate comenzile disponibile. Daca acest lucru nu se intampla
+si nu apare nici promptul interactiv, atunci trebuie sa se introduce un "ENTER" si dupa care sa se apeleze
+comanda help.
+
+DINCA DANIEL, 343C3
