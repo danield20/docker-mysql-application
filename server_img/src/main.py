@@ -164,7 +164,6 @@ def beautify_route(route):
         else:
             string += str(id) + ", "
     string += ")"
-    print(string, flush=True)
     cursor.execute("select * from flights_table where id in " + string)
     rows = cursor.fetchall()
     cursor.close()
@@ -184,13 +183,22 @@ def beautify_route(route):
 @app.route('/get_optimal', methods=['GET'])
 def get_optimal():
     args = request.args
-    source = args.get('source')
-    dest = args.get('dest')
-    max_flights = args.get('max')
-    dep_day = args.get('day')
-    best_route = get_opt(source, dest, max_flights, dep_day)
-    if best_route == None:
+    try:
+        source = args.get('source')
+        dest = args.get('dest')
+        max_flights = args.get('max')
+        dep_day = args.get('day')
+    except Exception as e:
+        return "Error calculating optimal\n" + str(e)
+
+    try:
+        best_route = get_opt(source, dest, max_flights, dep_day)
+    except pymysql.err.MySQLError as e:
+        return "Error calculating optimal!\n" + str(e)
+
+    if best_route == None or len(best_route) == 1:
         return "Sorry, no route available!"
+
     best_route_flight_ids = [x[3] for x in best_route]
     route_str = beautify_route(best_route_flight_ids)
 
@@ -217,13 +225,20 @@ def book_flight():
     number_of_people = json.loads(args.get('nr'))
 
     for flight_id in flight_list:
-        if not valid_flight(flight_id, number_of_people):
-            return "Flight no longer available or capacity exceided!"
+        try:
+            if not valid_flight(flight_id, number_of_people):
+                return "Flight no longer available or capacity exceided!"
+        except pymysql.err.MySQLError as e:
+            return "Error booking flight!\n" + str(e)
 
     connect_to_database()
     cursor = db.cursor()
 
-    cursor.execute("select res_id from reservations_table order by res_id desc limit 1")
+    try:
+        cursor.execute("select res_id from reservations_table order by res_id desc limit 1")
+    except pymysql.err.MySQLError as e:
+        return "Error booking flight!\n" + str(e)
+
     row = cursor.fetchone()
     if row == None:
         next_id = 1
@@ -231,13 +246,20 @@ def book_flight():
         next_id = row[0] + 1
 
     values_to_add = "({}, {})".format(next_id, number_of_people)
-    cursor.execute("insert into reservations_table values " + values_to_add)
+
+    try:
+        cursor.execute("insert into reservations_table values " + values_to_add)
+    except pymysql.err.MySQLError as e:
+        return "Error booking flight!\n" + str(e)
 
     for flight_id in flight_list:
         values_to_add = "({}, {})".format(next_id, flight_id)
-        cursor.execute("insert into reservations_flights values " + values_to_add)
-        cursor.execute("update flights_table set seats_taken = seats_taken + " + str(number_of_people) + " where"\
-            " id = " + str(flight_id))
+        try:
+            cursor.execute("insert into reservations_flights values " + values_to_add)
+            cursor.execute("update flights_table set seats_taken = seats_taken + " + str(number_of_people) + " where"\
+                " id = " + str(flight_id))
+        except pymysql.err.MySQLError as e:
+            return "Error booking flight!\n" + str(e)
 
     cursor.close()
     db.commit()
@@ -248,19 +270,30 @@ def book_flight():
 @app.route('/buy_ticket', methods=['PUT'])
 def buy_ticket():
     args = request.args
-    res_id = json.loads(args.get('res_id'))
-    card_number = json.loads(args.get('card_nr'))
+
+    try:
+        res_id = json.loads(args.get('res_id'))
+        card_number = json.loads(args.get('card_nr'))
+    except Exception as e:
+        return "Error in parameters\n" + str(e)
 
     connect_to_database()
     cursor = db.cursor()
 
-    cursor.execute("select * from reservations_table where res_id = " + str(res_id))
+    try:
+        cursor.execute("select * from reservations_table where res_id = " + str(res_id))
+    except pymysql.err.MySQLError as e:
+        return "Error buying ticket!\n" + str(e)
+
     row = cursor.fetchone()
     if row == None:
         return "Reservation is no longer available!"
     number_of_people = row[1]
 
-    cursor.execute("select flight_id from reservations_flights where res_id = " + str(res_id))
+    try:
+        cursor.execute("select flight_id from reservations_flights where res_id = " + str(res_id))
+    except pymysql.err.MySQLError as e:
+        return "Error buying ticket!\n" + str(e)
 
     ids = cursor.fetchall()
     buy_string_flights = "("
@@ -269,11 +302,18 @@ def buy_ticket():
     buy_string_flights = buy_string_flights[:-1]
     buy_string_flights += ")"
 
-    cursor.execute("select * from flights_table where id in " + buy_string_flights)
+    try:
+        cursor.execute("select * from flights_table where id in " + buy_string_flights)
+    except pymysql.err.MySQLError as e:
+        return "Error buying ticket!\n" + str(e)
+
     rows = cursor.fetchall()
 
     values_to_add = "({}, {}, {})".format("NULL", res_id, card_number)
-    cursor.execute("insert into bought_tickets values " + values_to_add)
+    try:
+        cursor.execute("insert into bought_tickets values " + values_to_add)
+    except pymysql.err.MySQLError as e:
+        return "Error buying ticket!\n" + str(e)
 
     cursor.close()
     db.commit()

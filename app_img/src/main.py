@@ -25,8 +25,13 @@ def login():
 
     connect_to_database()
     cursor = db.cursor()
-    cursor.execute("select * from admin_credentials where username = \"" + user + "\" and pass = \"" \
-        + passwd + "\"")
+
+    try:
+        cursor.execute("select * from admin_credentials where username = \"" + user + "\" and pass = \"" \
+            + passwd + "\"")
+    except pymysql.err.MySQLError as e:
+        return "Error at login!\n" + str(e)
+
     rows = cursor.fetchall()
     cursor.close()
     db.close()
@@ -48,7 +53,11 @@ def print_reservations():
     number_of_people = [row[1] for row in rows]
 
     for idx, res_id in enumerate(reservation_ids):
-        cursor.execute("select flight_id from reservations_flights where res_id = " + str(res_id))
+
+        try:
+            cursor.execute("select flight_id from reservations_flights where res_id = " + str(res_id))
+        except pymysql.err.MySQLError as e:
+            return "Error communicating to sql!\n" + str(e)
 
         ids = cursor.fetchall()
         res_string_flights = ""
@@ -74,9 +83,9 @@ def get_bought():
     db.close()
 
     for row in rows:
-        bought_string += "Bought ticket id: " + str(row[0]) + " for reservation " + str(row[1])
+        bought_string += "Bought ticket id: " + str(row[0]) + " for reservation " + str(row[1]) + "\n"
 
-    return bought_string
+    return bought_string[:-1]
 
 @app.route('/add_flight', methods=['PUT'])
 def add_flight():
@@ -98,10 +107,11 @@ def add_flight():
                                                                       number_of_people,
                                                                       0)
     cursor = db.cursor()
+
     try:
         cursor.execute("insert into flights_table values " + values_to_add)
-    except pymysql.err.MySQLError:
-        return "Error inserting flight!"
+    except pymysql.err.MySQLError as e:
+        return "Error inserting flight!\n" + str(e)
 
     db.commit()
     cursor.close()
@@ -117,18 +127,19 @@ def cancel_flight():
 
     try:
         cursor.execute("select * from flights_table where id = " + flight_id)
-    except pymysql.err.MySQLError:
-        return "Error canceling flight!"
+    except pymysql.err.MySQLError as e:
+        return "Error canceling flight!\n" + str(e)
 
     rows = cursor.fetchall()
 
     if len(rows) == 0:
         return "Flight does not exist!"
 
+
     try:
         cursor.execute("select distinct(res_id) from reservations_flights where flight_id = " + flight_id)
-    except pymysql.err.MySQLError:
-        return "Error canceling flight!"
+    except pymysql.err.MySQLError as e:
+        return "Error canceling flight!\n" + str(e)
 
     rows = cursor.fetchall()
     canceled_reservations = ""
@@ -136,22 +147,29 @@ def cancel_flight():
 
     for row in rows:
         try:
-
             cursor.execute("select book_id from bought_tickets where res_id = " + str(row[0]))
             rows2 = cursor.fetchall()
             for row2 in rows2:
                 canceled_bought_tickets += str(row2[0]) + ","
 
+            cursor.execute("select number_persons from reservations_table where res_id = " + str(row[0]))
+            nr_persons = cursor.fetchone()[0]
+            cursor.execute("select flight_id from reservations_flights where res_id = " + str(row[0]))
+            rows3 = cursor.fetchall()
+            for row3 in rows3:
+                cursor.execute("update flights_table set seats_taken = seats_taken - " + str(nr_persons) +\
+                    " where id = " + str(row3[0]))
+
             cursor.execute("delete from reservations_table where res_id = " + str(row[0]))
             canceled_reservations += str(row[0]) + ","
 
-        except pymysql.err.MySQLError:
-            return "Error canceling flight!"
+        except pymysql.err.MySQLError as e:
+            return "Error canceling flight!\n" + str(e)
 
     try:
         cursor.execute("delete from flights_table where id = " + flight_id)
-    except pymysql.err.MySQLError:
-        return "Error canceling flight!"
+    except pymysql.err.MySQLError as e:
+        return "Error canceling flight!\n" + str(e)
 
     db.commit()
     cursor.close()
